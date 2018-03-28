@@ -1,6 +1,10 @@
 from fuzzywuzzy import fuzz
 from fuzzywuzzy import process
-import sys, getopt, json, operator
+import sys, getopt, operator
+try:
+    from .converter_obj import RatioConverter, DensityConverter
+except ImportError:
+    from converter.src.converter_obj import RatioConverter, DensityConverter
 
 
 def get_matches(user_input, options):
@@ -51,12 +55,28 @@ def get_input(options, option_name, interactive=False, is_app=True):
         return matches[0][0]
 
 
-def get_converted(ratios, from_measure, to_measure, amount):
+def get_converted_with_ratios(ratios, from_measure, to_measure, amount):
     if from_measure == to_measure:
         return str(amount)
     if float(ratios[from_measure]) == 0:
         return "infinite"
     return str(round(amount / float(ratios[from_measure]) * float(ratios[to_measure]), 2))
+
+
+def get_converted_with_density(density, unit_ratios, from_unit, to_unit, amount):
+    from_ratio = float(unit_ratios[from_unit])
+    to_ratio = float(unit_ratios[to_unit])
+
+    if from_ratio * to_ratio > 0:
+        # convert weight to weight, or volume to volume
+        return str(round(amount * from_ratio / to_ratio, 2))
+
+    if from_ratio < 0:
+        # convert volume to weight
+        return str(round(-amount * from_ratio * float(density) / to_ratio, 2))
+
+    # convert weight to volume
+    return str(round(-amount * from_ratio / float(density) / to_ratio, 2))
 
 
 def run_app(conversion_ratios, interactive=False):
@@ -86,7 +106,7 @@ def run_app(conversion_ratios, interactive=False):
             except ValueError:
                 pass
 
-            converted_amount = get_converted(ratios, from_measure, to_measure, amount)
+            converted_amount = get_converted_with_ratios(ratios, from_measure, to_measure, amount)
             print(str(amount) + ' ' + from_measure + " of " + \
                   ingredient + " is " + converted_amount + ' ' + to_measure)
             print()
@@ -115,7 +135,7 @@ def run_once(conversion_ratios, ingredient, amount=1, from_measure="", to_measur
     except ValueError:
         amount = 1
 
-    converted_amount = get_converted(ratios, from_measure, to_measure, amount)
+    converted_amount = get_converted_with_ratios(ratios, from_measure, to_measure, amount)
     print(str(amount) + ' ' + from_measure + " of " + \
           ingredient + " is " + converted_amount + ' ' + to_measure)
     print()
@@ -124,26 +144,33 @@ def run_once(conversion_ratios, ingredient, amount=1, from_measure="", to_measur
 def main():
 
     interactive = False
+    density_converter = False
 
     try:
-        opts, _ = getopt.getopt(sys.argv[1:], 'hi', ["help", "interactive"])
+        opts, _ = getopt.getopt(sys.argv[1:], 'hic:', ["help", "interactive", "converter="])
     except getopt.GetoptError:
         print("Illegal option")
         sys.exit(2)
-    for opt, _ in opts:
+    for opt, arg in opts:
         if opt in ('-h', "--help"):
             print("Options")
-            print("-h, --help:", '\t', "Show help")
-            print("-i, --interactive:", '\t', "Interactive mode")
+            print("-h, --help", '\t\t', "Show help")
+            print("-i, --interactive", '\t\t', "Interactive mode")
+            print("-c, --converter", "[ratio|density]", '\t\t', "Use ratio (default) or density converter")
             sys.exit()
         elif opt in ('-i', "--interactive"):
             interactive = True
+        elif opt in ('-c', "--converter"):
+            if arg == "density":
+                density_converter = True
 
-
-    with open('conversion_ratios.json', 'r') as ratios:
-        conversion_ratios = json.load(ratios)
-
-    run_app(conversion_ratios, interactive=interactive)
+    if density_converter:
+        print("Using density converter")
+        converter = DensityConverter()
+    else:
+        print("Using ratio converter")
+        converter = RatioConverter()
+    converter.run_app(interactive=interactive)
 
 
 

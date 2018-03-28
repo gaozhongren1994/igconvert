@@ -1,4 +1,4 @@
-import os, click
+import click
 from .converter_app import *
 
 
@@ -8,20 +8,26 @@ from .converter_app import *
 @click.option('--amount', '-a', type=float, help="Amount of ingredient to convert.")
 @click.option('-f', default="", help="Measurement unit converting from.")
 @click.option('-t', default="", help="Measurement unit converting to.")
-def convert(ingredient, interactive, amount, f, t):
+@click.option('--converter', '-c', default="ratio", type=click.Choice(['ratio', 'density']),
+              help="Type of converter")
+def convert(ingredient, interactive, amount, f, t, converter):
 
     """This is a unit converter for cooking ingredients."""
 
-    ratio_file = os.path.join(os.path.dirname(__file__), 'conversion_ratios.json')
-    with open(ratio_file) as ratios:
-        conversion_ratios = json.load(ratios)
+    density_converter = False
+    if converter == 'density':
+        density_converter = True
 
-    get_input.first_time = False
+    if density_converter:
+        converter = DensityConverter()
+    else:
+        converter = RatioConverter()
+
     if ingredient:
         ingredient = ' '.join(ingredient)
-        run_once(conversion_ratios, ingredient, amount, f, t, interactive)
+        converter.run_once(ingredient, amount, f, t, interactive)
     else:
-        run_app(conversion_ratios, interactive=interactive)
+        converter.run_app(interactive)
 
 
 if __name__ == '__main__':
